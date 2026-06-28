@@ -1,5 +1,6 @@
-import { useRef, useState, type ReactNode, type MouseEvent } from "react";
-import { motion, useInView, useMotionValue, useSpring, useTransform } from "motion/react";
+import { useEffect, useRef, useState, type ReactNode, type MouseEvent } from "react";
+import { motion, useInView, useMotionValue, useSpring } from "motion/react";
+
 
 /* Scroll-triggered reveal with optional stagger via index */
 export function Reveal({
