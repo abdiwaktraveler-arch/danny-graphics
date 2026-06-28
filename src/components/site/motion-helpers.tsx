@@ -119,38 +119,28 @@ export function Tilt({
 export function Counter({ to, suffix = "" }: { to: number; suffix?: string }) {
   const ref = useRef<HTMLSpanElement>(null);
   const inView = useInView(ref, { once: true, margin: "-60px" });
-  const mv = useMotionValue(0);
-  const rounded = useTransform(mv, (v) => Math.round(v).toString() + suffix);
-  const [display, setDisplay] = useState("0" + suffix);
+  const [display, setDisplay] = useState(0);
 
-  if (inView) {
-    const controls = { stop: () => {} };
-    void controls;
-  }
-
-  // animate on view
-  useAnimateOnView(ref, () => {
+  useEffect(() => {
+    if (!inView) return;
+    let raf = 0;
     const start = performance.now();
     const dur = 1600;
     const tick = (now: number) => {
       const p = Math.min((now - start) / dur, 1);
       const eased = 1 - Math.pow(1 - p, 3);
-      mv.set(eased * to);
-      setDisplay(Math.round(eased * to).toString() + suffix);
-      if (p < 1) requestAnimationFrame(tick);
+      setDisplay(Math.round(eased * to));
+      if (p < 1) raf = requestAnimationFrame(tick);
     };
-    requestAnimationFrame(tick);
-  });
+    raf = requestAnimationFrame(tick);
+    return () => cancelAnimationFrame(raf);
+  }, [inView, to]);
 
-  void rounded;
-  return <span ref={ref}>{display}</span>;
+  return (
+    <span ref={ref}>
+      {display}
+      {suffix}
+    </span>
+  );
 }
 
-function useAnimateOnView(ref: React.RefObject<HTMLElement | null>, run: () => void) {
-  const inView = useInView(ref, { once: true, margin: "-60px" });
-  const started = useRef(false);
-  if (inView && !started.current) {
-    started.current = true;
-    run();
-  }
-}
