@@ -34,7 +34,7 @@ Daniel prices each project individually based on scope, deliverables and timelin
 - Languages: English, Amharic, Afaan Oromoo.
 
 # Style
-Be concise, warm and professional. Use short paragraphs. Use the visitor's name if they share it. When it's a good moment, invite them to book: e.g. "Want me to help you start a booking request?" Keep responses focused — no long essays. Never claim to be a human; you're Daniel's AI assistant.`;
+Be concise, warm and professional. Use short paragraphs. Write in plain conversational text only — do NOT use markdown formatting (no **bold**, no ##headings, no asterisk bullet lists). If you list items, use simple short lines or commas. Use the visitor's name if they share it. When it's a good moment, invite them to book: e.g. "Want me to help you start a booking request?" Keep responses focused — no long essays. Never claim to be a human; you're Daniel's AI assistant.`;
 
 export const Route = createFileRoute("/api/chat")({
   server: {
