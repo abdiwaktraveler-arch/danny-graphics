@@ -87,7 +87,7 @@ export const Route = createRootRouteWithContext<{ queryClient: QueryClient }>()(
       },
       { name: "author", content: "Daniel Korsa" },
       { name: "theme-color", content: "#004D40" },
-      { property: "og:title", content: "Daniel Korsa — Graphics & Brand Designer" },
+      { property: "og:title", content: "Daniel Korsa — Graphics Designer & Visual Brand Designer" },
       {
         property: "og:description",
         content:
@@ -95,6 +95,12 @@ export const Route = createRootRouteWithContext<{ queryClient: QueryClient }>()(
       },
       { property: "og:type", content: "website" },
       { name: "twitter:card", content: "summary_large_image" },
+      { name: "twitter:title", content: "Daniel Korsa — Graphics Designer & Visual Brand Designer" },
+      { name: "description", content: "contact me" },
+      { property: "og:description", content: "contact me" },
+      { name: "twitter:description", content: "contact me" },
+      { property: "og:image", content: "https://storage.googleapis.com/gpt-engineer-file-uploads/XqFlmdyZdCUhQ3qF6HXBg6cTdxX2/social-images/social-1782724653346-IMG_8749-removebg-preview.webp" },
+      { name: "twitter:image", content: "https://storage.googleapis.com/gpt-engineer-file-uploads/XqFlmdyZdCUhQ3qF6HXBg6cTdxX2/social-images/social-1782724653346-IMG_8749-removebg-preview.webp" },
     ],
     links: [
       { rel: "preconnect", href: "https://fonts.googleapis.com" },
