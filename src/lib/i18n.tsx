@@ -145,6 +145,21 @@ const en: Dict = {
   "widget.title": "Quick contact",
   "widget.call": "Call",
   "widget.message": "Message",
+
+  "chat.fab": "Chat with Danny AI",
+  "chat.title": "Danny — AI Assistant",
+  "chat.status": "Online · replies instantly",
+  "chat.greeting":
+    "👋 Hi! I'm Danny's AI assistant. Ask me about services, pricing or get help starting a booking. I speak English, አማርኛ and Afaan Oromoo.",
+  "chat.placeholder": "Type your message...",
+  "chat.send": "Send",
+  "chat.error": "Sorry, something went wrong. Please try again.",
+  "chat.suggest1": "What services do you offer?",
+  "chat.suggest2": "How much does a logo cost?",
+  "chat.suggest3": "I want to book a project",
+  "chat.tabChat": "AI Chat",
+  "chat.tabContact": "Contact",
+  "chat.clear": "New chat",
 };
 
 const am: Dict = {
@@ -282,6 +297,21 @@ const am: Dict = {
   "widget.title": "ፈጣን ግንኙነት",
   "widget.call": "ይደውሉ",
   "widget.message": "መልዕክት",
+
+  "chat.fab": "ከዳኒ AI ጋር ይወያዩ",
+  "chat.title": "ዳኒ — AI ረዳት",
+  "chat.status": "በመስመር ላይ · ወዲያውኑ ይመልሳል",
+  "chat.greeting":
+    "👋 ሰላም! እኔ የዳንኤል AI ረዳት ነኝ። ስለ አገልግሎቶች፣ ዋጋ ይጠይቁ ወይም ቡኪንግ ለመጀመር እርዳታ ያግኙ። እንግሊዝኛ፣ አማርኛ እና አፋን ኦሮሞ እናገራለሁ።",
+  "chat.placeholder": "መልዕክትዎን ይጻፉ...",
+  "chat.send": "ላክ",
+  "chat.error": "ይቅርታ፣ የሆነ ችግር ተፈጥሯል። እባክዎ እንደገና ይሞክሩ።",
+  "chat.suggest1": "ምን አገልግሎቶች ይሰጣሉ?",
+  "chat.suggest2": "ሎጎ ምን ያህል ያስከፍላል?",
+  "chat.suggest3": "ፕሮጀክት መዝዝ እፈልጋለሁ",
+  "chat.tabChat": "AI ውይይት",
+  "chat.tabContact": "አግኙኝ",
+  "chat.clear": "አዲስ ውይይት",
 };
 
 const om: Dict = {
@@ -419,6 +449,21 @@ const om: Dict = {
   "widget.title": "Qunnamtii Saffisaa",
   "widget.call": "Bilbili",
   "widget.message": "Ergaa",
+
+  "chat.fab": "Danny AI waliin haasawi",
+  "chat.title": "Danny — Gargaaraa AI",
+  "chat.status": "Sarara irra · battalumatti deebisa",
+  "chat.greeting":
+    "👋 Akkam! Ani gargaaraa AI Daniel ti. Waa'ee tajaajilaa, gatii gaafadhu yookin pirojektii jalqabuuf gargaarsa argadhu. Afaan Ingiliffaa, Amaariffaa fi Afaan Oromoo nan dubbadha.",
+  "chat.placeholder": "Ergaa kee barreessi...",
+  "chat.send": "Ergi",
+  "chat.error": "Dhiifama, rakkoon uumame. Maaloo irra deebi'ii yaali.",
+  "chat.suggest1": "Tajaajiloota maalii dhiheessitu?",
+  "chat.suggest2": "Loogoon meeqa baasa?",
+  "chat.suggest3": "Pirojektii ajajuu barbaada",
+  "chat.tabChat": "Haasawa AI",
+  "chat.tabContact": "Na qunnami",
+  "chat.clear": "Haasawa haaraa",
 };
 
 const dicts: Record<Lang, Dict> = { en, am, om };

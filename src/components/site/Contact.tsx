@@ -13,6 +13,7 @@ import {
 } from "lucide-react";
 import { useI18n } from "@/lib/i18n";
 import { CONTACT } from "@/lib/site";
+import { supabase } from "@/integrations/supabase/client";
 import { Reveal } from "./motion-helpers";
 import { SocialRow } from "./socials";
 
@@ -81,13 +82,15 @@ function FloatingField({ id, label, type = "text", value, onChange, error, texta
 }
 
 export default function Contact() {
-  const { t } = useI18n();
+  const { t, lang } = useI18n();
   const [step, setStep] = useState(0);
   const [sent, setSent] = useState(false);
   const [sending, setSending] = useState(false);
   const fileRef = useRef<HTMLInputElement>(null);
   const [dragging, setDragging] = useState(false);
   const [fileName, setFileName] = useState<string | null>(null);
+  const [file, setFile] = useState<File | null>(null);
+  const [submitError, setSubmitError] = useState<string | null>(null);
 
   const [form, setForm] = useState({
     name: "",
@@ -119,20 +122,59 @@ export default function Contact() {
   };
   const back = () => setStep((s) => Math.max(s - 1, 0));
 
-  const submit = () => {
+  const submit = async () => {
+    setSubmitError(null);
     if (!validateStep(0) || !validateStep(1)) {
       if (!validateStep(0)) setStep(0);
       return;
     }
     setSending(true);
-    setTimeout(() => {
-      setSending(false);
+    try {
+      let attachmentPath = "";
+      if (file) {
+        const ext = file.name.split(".").pop() ?? "file";
+        const path = `${crypto.randomUUID()}.${ext}`;
+        const { error: upErr } = await supabase.storage
+          .from("booking-attachments")
+          .upload(path, file, { upsert: false });
+        if (!upErr) attachmentPath = path;
+      }
+
+      const res = await fetch("/api/public/bookings/submit", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          name: form.name,
+          email: form.email,
+          phone: form.phone,
+          service: form.service,
+          message: form.message,
+          attachmentUrl: attachmentPath,
+          locale: lang,
+        }),
+      });
+
+      if (!res.ok) {
+        const data = await res.json().catch(() => ({}));
+        throw new Error(data.error ?? "error");
+      }
       setSent(true);
-    }, 1400);
+    } catch (err: any) {
+      setSubmitError(err?.message || t("contact.err.message"));
+    } finally {
+      setSending(false);
+    }
   };
 
   const handleFiles = (files: FileList | null) => {
-    if (files && files[0]) setFileName(files[0].name);
+    if (files && files[0]) {
+      if (files[0].size > 10 * 1024 * 1024) {
+        setSubmitError("File must be under 10MB.");
+        return;
+      }
+      setFile(files[0]);
+      setFileName(files[0].name);
+    }
   };
   const onDrop = (e: DragEvent) => {
     e.preventDefault();
@@ -145,7 +187,10 @@ export default function Contact() {
     setStep(0);
     setForm({ name: "", email: "", phone: "", service: "", message: "" });
     setFileName(null);
+    setFile(null);
+    setSubmitError(null);
   };
+
 
   const contactItems = [
     { icon: Phone, label: t("contact.phone"), value: CONTACT.phone, href: CONTACT.phoneHref },
@@ -348,6 +393,12 @@ export default function Contact() {
                         </motion.div>
                       )}
                     </AnimatePresence>
+
+                    {submitError && (
+                      <p className="mt-4 rounded-xl bg-destructive/10 px-3 py-2 text-sm text-destructive">
+                        {submitError}
+                      </p>
+                    )}
 
                     {/* actions */}
                     <div className="mt-6 flex items-center gap-3">

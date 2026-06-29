@@ -8,7 +8,7 @@ import Services from "@/components/site/Services";
 import Work from "@/components/site/Work";
 import Contact from "@/components/site/Contact";
 import Footer from "@/components/site/Footer";
-import FloatingWidget from "@/components/site/FloatingWidget";
+import ChatBot from "@/components/site/ChatBot";
 import Preloader from "@/components/site/Preloader";
 
 export const Route = createFileRoute("/")({
@@ -76,7 +76,7 @@ function Home() {
         <Contact />
       </main>
       <Footer />
-      <FloatingWidget />
+      <ChatBot />
     </div>
   );
 }
