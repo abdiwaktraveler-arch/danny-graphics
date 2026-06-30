@@ -13,7 +13,7 @@ import {
 } from "lucide-react";
 import { useI18n } from "@/lib/i18n";
 import { CONTACT } from "@/lib/site";
-import { supabase } from "@/integrations/supabase/client";
+
 import { Reveal } from "./motion-helpers";
 import { SocialRow } from "./socials";
 
