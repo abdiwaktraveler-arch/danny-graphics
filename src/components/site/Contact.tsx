@@ -130,28 +130,21 @@ export default function Contact() {
     }
     setSending(true);
     try {
-      let attachmentPath = "";
-      if (file) {
-        const ext = file.name.split(".").pop() ?? "file";
-        const path = `${crypto.randomUUID()}.${ext}`;
-        const { error: upErr } = await supabase.storage
-          .from("booking-attachments")
-          .upload(path, file, { upsert: false });
-        if (!upErr) attachmentPath = path;
-      }
+      // Send everything to the server as multipart form data. The attachment
+      // is validated and stored server-side (the storage bucket is no longer
+      // writable from the browser).
+      const fd = new FormData();
+      fd.append("name", form.name);
+      fd.append("email", form.email);
+      fd.append("phone", form.phone);
+      fd.append("service", form.service);
+      fd.append("message", form.message);
+      fd.append("locale", lang);
+      if (file) fd.append("file", file);
 
       const res = await fetch("/api/public/bookings/submit", {
         method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          name: form.name,
-          email: form.email,
-          phone: form.phone,
-          service: form.service,
-          message: form.message,
-          attachmentUrl: attachmentPath,
-          locale: lang,
-        }),
+        body: fd,
       });
 
       if (!res.ok) {
