@@ -7,9 +7,30 @@ const bookingSchema = z.object({
   phone: z.string().trim().max(40).optional().default(""),
   service: z.string().trim().max(160).optional().default(""),
   message: z.string().trim().min(1).max(4000),
-  attachmentUrl: z.string().trim().max(1000).optional().default(""),
   locale: z.string().trim().max(8).optional().default(""),
 });
+
+// Server-side upload constraints (defense in depth — the bucket is no longer
+// writable from the client).
+const MAX_FILE_BYTES = 10 * 1024 * 1024; // 10MB
+const ALLOWED_MIME = new Set([
+  "image/png",
+  "image/jpeg",
+  "image/jpg",
+  "image/webp",
+  "image/gif",
+  "image/svg+xml",
+  "application/pdf",
+]);
+const EXT_BY_MIME: Record<string, string> = {
+  "image/png": "png",
+  "image/jpeg": "jpg",
+  "image/jpg": "jpg",
+  "image/webp": "webp",
+  "image/gif": "gif",
+  "image/svg+xml": "svg",
+  "application/pdf": "pdf",
+};
 
 function esc(s: string) {
   return s.replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;");
@@ -72,14 +93,42 @@ export const Route = createFileRoute("/api/public/bookings/submit")({
   server: {
     handlers: {
       POST: async ({ request }) => {
-        let raw: unknown;
+        const contentType = request.headers.get("content-type") ?? "";
+
+        // Parse the text fields and the optional file from multipart form data.
+        let fields: Record<string, string> = {};
+        let file: File | null = null;
+
         try {
-          raw = await request.json();
+          if (contentType.includes("multipart/form-data")) {
+            const fd = await request.formData();
+            fields = {
+              name: String(fd.get("name") ?? ""),
+              email: String(fd.get("email") ?? ""),
+              phone: String(fd.get("phone") ?? ""),
+              service: String(fd.get("service") ?? ""),
+              message: String(fd.get("message") ?? ""),
+              locale: String(fd.get("locale") ?? ""),
+            };
+            const f = fd.get("file");
+            if (f instanceof File && f.size > 0) file = f;
+          } else {
+            // Backwards-compatible JSON path (no attachment).
+            const raw = (await request.json()) as Record<string, unknown>;
+            fields = {
+              name: String(raw.name ?? ""),
+              email: String(raw.email ?? ""),
+              phone: String(raw.phone ?? ""),
+              service: String(raw.service ?? ""),
+              message: String(raw.message ?? ""),
+              locale: String(raw.locale ?? ""),
+            };
+          }
         } catch {
           return Response.json({ error: "Invalid request body." }, { status: 400 });
         }
 
-        const parsed = bookingSchema.safeParse(raw);
+        const parsed = bookingSchema.safeParse(fields);
         if (!parsed.success) {
           return Response.json(
             { error: "Please check your details and try again." },
@@ -90,6 +139,33 @@ export const Route = createFileRoute("/api/public/bookings/submit")({
 
         const { supabaseAdmin } = await import("@/integrations/supabase/client.server");
 
+        // Validate & store the attachment server-side (the bucket is not
+        // client-writable). Reject oversized or disallowed file types.
+        let attachmentPath: string | null = null;
+        if (file) {
+          if (file.size > MAX_FILE_BYTES) {
+            return Response.json({ error: "File must be under 10MB." }, { status: 400 });
+          }
+          const mime = file.type.toLowerCase();
+          const ext = EXT_BY_MIME[mime];
+          if (!ALLOWED_MIME.has(mime) || !ext) {
+            return Response.json(
+              { error: "Unsupported file type. Upload an image or PDF." },
+              { status: 400 },
+            );
+          }
+          const path = `${crypto.randomUUID()}.${ext}`;
+          const bytes = new Uint8Array(await file.arrayBuffer());
+          const { error: upErr } = await supabaseAdmin.storage
+            .from("booking-attachments")
+            .upload(path, bytes, { contentType: mime, upsert: false });
+          if (upErr) {
+            console.error("Attachment upload error:", upErr);
+            return Response.json({ error: "Could not upload your file." }, { status: 500 });
+          }
+          attachmentPath = path;
+        }
+
         const { data: booking, error } = await supabaseAdmin
           .from("bookings")
           .insert({
@@ -98,7 +174,7 @@ export const Route = createFileRoute("/api/public/bookings/submit")({
             phone: d.phone || null,
             service: d.service || null,
             message: d.message,
-            attachment_url: d.attachmentUrl || null,
+            attachment_url: attachmentPath,
             locale: d.locale || null,
           })
           .select("id")
