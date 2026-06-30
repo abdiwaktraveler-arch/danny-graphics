@@ -14,8 +14,8 @@ export const IMAGES = {
 };
 
 export const CONTACT = {
-  phone: "+251 910 287 951",
-  phoneHref: "tel:+251910287951",
+  phone: "+251 910 287 915",
+  phoneHref: "tel:+251910287915",
   email: "danikorsa47@gmail.com",
   emailHref: "mailto:danikorsa47@gmail.com",
   location: "Bale, Robe, Ethiopia",
