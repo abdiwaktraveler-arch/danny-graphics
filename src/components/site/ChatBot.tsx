@@ -47,7 +47,24 @@ export default function ChatBot() {
         body: JSON.stringify({ messages: next }),
       });
 
-      if (!res.ok || !res.body) throw new Error("bad response");
+      // Surface actionable server errors (e.g. missing env var / API key) to the user.
+      if (!res.ok) {
+        let friendly = t("chat.error");
+        try {
+          const data = (await res.clone().json()) as { error?: string };
+          if (data?.error) friendly = data.error;
+        } catch {
+          /* non-JSON error body — keep generic message */
+        }
+        setMessages((m) => {
+          const copy = [...m];
+          copy[copy.length - 1] = { role: "assistant", content: friendly };
+          return copy;
+        });
+        return;
+      }
+
+      if (!res.body) throw new Error("bad response");
 
       const reader = res.body.getReader();
       const decoder = new TextDecoder();
