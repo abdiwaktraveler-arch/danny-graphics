@@ -110,7 +110,7 @@ export default function ChatBot() {
             animate={{ opacity: 1, y: 0, scale: 1 }}
             exit={{ opacity: 0, y: 20, scale: 0.95 }}
             transition={{ type: "spring", stiffness: 260, damping: 24 }}
-            className="glass flex h-[32rem] max-h-[78vh] w-[min(92vw,23rem)] flex-col overflow-hidden rounded-3xl shadow-elegant"
+            className="glass flex h-[min(32rem,80dvh)] w-[min(92vw,23rem)] flex-col overflow-hidden rounded-3xl shadow-elegant"
           >
             {/* header */}
             <div className="relative overflow-hidden p-4" style={{ background: "var(--gradient-brand)" }}>
