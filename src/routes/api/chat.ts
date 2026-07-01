@@ -1,6 +1,7 @@
 import { createFileRoute } from "@tanstack/react-router";
 import { streamText, type ModelMessage } from "ai";
 import { createLovableAiGatewayProvider } from "@/lib/ai-gateway.server";
+import { createOpenAiProvider } from "@/lib/openai-provider.server";
 import { OWNER, CONTACT, CONTACT_SUMMARY } from "@/lib/site";
 
 type ChatBody = { messages?: { role: "user" | "assistant"; content: string }[] };
@@ -40,16 +41,39 @@ ${CONTACT_SUMMARY}
 # Style
 Be concise, warm and professional. Use short paragraphs. Write in plain conversational text only — do NOT use markdown formatting (no **bold**, no ##headings, no asterisk bullet lists). If you list items, use simple short lines or commas. Use the visitor's name if they share it. When it's a good moment, invite them to book: e.g. "Want me to help you start a booking request?" Keep responses focused — no long essays. Never claim to be a human; you're ${OWNER.name}'s AI assistant.`;
 
+/** JSON error the client can render as a friendly, actionable message. */
+function configError(message: string) {
+  return new Response(JSON.stringify({ error: message }), {
+    status: 503,
+    headers: { "content-type": "application/json" },
+  });
+}
+
 export const Route = createFileRoute("/api/chat")({
   server: {
     handlers: {
       POST: async ({ request }) => {
-        const key = process.env.LOVABLE_API_KEY;
-        if (!key) {
-          return new Response(JSON.stringify({ error: "AI is not configured." }), {
-            status: 500,
-            headers: { "content-type": "application/json" },
-          });
+        const openaiKey = process.env.OPENAI_API_KEY;
+        const lovableKey = process.env.LOVABLE_API_KEY;
+
+        // Pick a provider. Prefer the user's own OpenAI key (works on any host,
+        // incl. Vercel); fall back to the managed Lovable AI Gateway.
+        let getModel: () => Parameters<typeof streamText>[0]["model"];
+        if (openaiKey) {
+          const openai = createOpenAiProvider(openaiKey);
+          getModel = () => openai(process.env.OPENAI_MODEL || "gpt-4o-mini");
+        } else if (lovableKey) {
+          const gateway = createLovableAiGatewayProvider(lovableKey);
+          getModel = () => gateway("google/gemini-3-flash-preview");
+        } else {
+          // Neither key is set — most commonly a missing env var on Vercel.
+          return configError(
+            "The AI assistant isn't configured on this deployment yet. " +
+              "Add an OPENAI_API_KEY environment variable (in Vercel: Project → Settings → " +
+              "Environment Variables, for both Production and Preview) and redeploy. " +
+              "Meanwhile you can reach us on Telegram " +
+              `${CONTACT.bizTelegram} or by phone at ${CONTACT.phone}.`,
+          );
         }
 
         let body: ChatBody;
@@ -63,7 +87,6 @@ export const Route = createFileRoute("/api/chat")({
         }
 
         const incoming = Array.isArray(body.messages) ? body.messages : [];
-        // Keep a bounded history and sanitize.
         const history: ModelMessage[] = incoming
           .filter(
             (m) =>
@@ -82,21 +105,24 @@ export const Route = createFileRoute("/api/chat")({
           });
         }
 
-        const gateway = createLovableAiGatewayProvider(key);
-
         try {
           const result = streamText({
-            model: gateway("google/gemini-3-flash-preview"),
+            model: getModel(),
             system: SYSTEM_PROMPT,
             messages: history,
           });
           return result.toTextStreamResponse();
         } catch (err) {
           console.error("Chat error:", err);
-          return new Response(JSON.stringify({ error: "The assistant is unavailable right now." }), {
-            status: 502,
-            headers: { "content-type": "application/json" },
-          });
+          return new Response(
+            JSON.stringify({
+              error:
+                "The assistant is temporarily unavailable. This can happen if the API key is " +
+                "invalid or out of credits. Please try again shortly, or contact us directly on " +
+                `Telegram ${CONTACT.bizTelegram}.`,
+            }),
+            { status: 502, headers: { "content-type": "application/json" } },
+          );
         }
       },
     },

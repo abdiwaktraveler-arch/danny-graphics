@@ -47,7 +47,24 @@ export default function ChatBot() {
         body: JSON.stringify({ messages: next }),
       });
 
-      if (!res.ok || !res.body) throw new Error("bad response");
+      // Surface actionable server errors (e.g. missing env var / API key) to the user.
+      if (!res.ok) {
+        let friendly = t("chat.error");
+        try {
+          const data = (await res.clone().json()) as { error?: string };
+          if (data?.error) friendly = data.error;
+        } catch {
+          /* non-JSON error body — keep generic message */
+        }
+        setMessages((m) => {
+          const copy = [...m];
+          copy[copy.length - 1] = { role: "assistant", content: friendly };
+          return copy;
+        });
+        return;
+      }
+
+      if (!res.body) throw new Error("bad response");
 
       const reader = res.body.getReader();
       const decoder = new TextDecoder();
@@ -85,7 +102,7 @@ export default function ChatBot() {
   ];
 
   return (
-    <div className="fixed bottom-5 right-5 z-50 flex flex-col items-end gap-3">
+    <div className="fixed bottom-4 right-4 z-50 flex flex-col items-end gap-3 sm:bottom-5 sm:right-5" style={{ paddingBottom: "env(safe-area-inset-bottom)", paddingRight: "env(safe-area-inset-right)" }}>
       <AnimatePresence>
         {open && (
           <motion.div
@@ -93,7 +110,7 @@ export default function ChatBot() {
             animate={{ opacity: 1, y: 0, scale: 1 }}
             exit={{ opacity: 0, y: 20, scale: 0.95 }}
             transition={{ type: "spring", stiffness: 260, damping: 24 }}
-            className="glass flex h-[32rem] max-h-[78vh] w-[min(92vw,23rem)] flex-col overflow-hidden rounded-3xl shadow-elegant"
+            className="glass flex h-[min(32rem,80dvh)] w-[min(92vw,23rem)] flex-col overflow-hidden rounded-3xl shadow-elegant"
           >
             {/* header */}
             <div className="relative overflow-hidden p-4" style={{ background: "var(--gradient-brand)" }}>
