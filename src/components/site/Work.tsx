@@ -1,8 +1,10 @@
-import { useState } from "react";
+import { useEffect, useMemo, useState } from "react";
+import { useServerFn } from "@tanstack/react-start";
 import { AnimatePresence, motion } from "motion/react";
 import { Eye, X, ArrowLeft, ArrowRight } from "lucide-react";
 import { useI18n } from "@/lib/i18n";
 import { PROJECTS, type WorkCategory } from "@/lib/site";
+import { getPublicWorks } from "@/lib/works.functions";
 import { Reveal } from "./motion-helpers";
 
 const filters: { id: "all" | WorkCategory; key: string }[] = [
@@ -13,12 +15,56 @@ const filters: { id: "all" | WorkCategory; key: string }[] = [
   { id: "social", key: "work.filter.social" },
 ];
 
+type WorkItem = {
+  id: string;
+  image: string;
+  title: string;
+  category: WorkCategory;
+  span?: boolean;
+};
+
 export default function Work() {
   const { t } = useI18n();
+  const callGetWorks = useServerFn(getPublicWorks);
   const [active, setActive] = useState<"all" | WorkCategory>("all");
   const [lightbox, setLightbox] = useState<number | null>(null);
+  const [dbItems, setDbItems] = useState<WorkItem[] | null>(null);
 
-  const visible = PROJECTS.filter((p) => active === "all" || p.category === active);
+  useEffect(() => {
+    let alive = true;
+    callGetWorks()
+      .then((rows) => {
+        if (!alive) return;
+        setDbItems(
+          rows.map((r) => ({
+            id: r.id,
+            image: r.url,
+            title: r.title,
+            category: r.category,
+            span: r.featured,
+          })),
+        );
+      })
+      .catch(() => alive && setDbItems([]));
+    return () => {
+      alive = false;
+    };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+
+  // Use admin-managed works when available; otherwise show the built-in samples.
+  const items: WorkItem[] = useMemo(() => {
+    if (dbItems && dbItems.length > 0) return dbItems;
+    return PROJECTS.map((p) => ({
+      id: p.id,
+      image: p.image,
+      title: t(p.titleKey),
+      category: p.category,
+      span: p.span,
+    }));
+  }, [dbItems, t]);
+
+  const visible = items.filter((p) => active === "all" || p.category === active);
 
   const openAt = (id: string) => {
     const idx = visible.findIndex((p) => p.id === id);
@@ -85,16 +131,16 @@ export default function Work() {
               >
                 <img
                   src={p.image}
-                  alt={t(p.titleKey)}
+                  alt={p.title}
                   loading="lazy"
                   className="h-full w-full object-cover transition-transform duration-700 group-hover:scale-110"
                 />
                 <div className="absolute inset-0 bg-gradient-to-t from-accent/90 via-accent/20 to-transparent opacity-0 transition-opacity duration-500 group-hover:opacity-100" />
                 <div className="absolute inset-x-0 bottom-0 translate-y-3 p-4 text-left opacity-0 transition-all duration-500 group-hover:translate-y-0 group-hover:opacity-100">
                   <span className="text-[11px] font-semibold uppercase tracking-widest text-gold">
-                    {t(p.catKey)}
+                    {t(`work.filter.${p.category}`)}
                   </span>
-                  <h3 className="font-display text-base font-semibold text-white">{t(p.titleKey)}</h3>
+                  <h3 className="font-display text-base font-semibold text-white">{p.title}</h3>
                 </div>
                 <div className="absolute right-3 top-3 flex h-9 w-9 items-center justify-center rounded-full glass opacity-0 transition-opacity duration-500 group-hover:opacity-100">
                   <Eye className="h-4 w-4 text-white" />
@@ -154,16 +200,16 @@ export default function Work() {
             >
               <img
                 src={visible[lightbox].image}
-                alt={t(visible[lightbox].titleKey)}
+                alt={visible[lightbox].title}
                 className="max-h-[72vh] w-full rounded-2xl object-contain"
               />
               <div className="flex items-center justify-between px-3 py-3">
                 <div>
                   <span className="text-[11px] font-semibold uppercase tracking-widest text-gold">
-                    {t(visible[lightbox].catKey)}
+                    {t(`work.filter.${visible[lightbox].category}`)}
                   </span>
                   <h3 className="font-display text-lg font-semibold text-white">
-                    {t(visible[lightbox].titleKey)}
+                    {visible[lightbox].title}
                   </h3>
                 </div>
                 <span className="text-sm text-white/60">
