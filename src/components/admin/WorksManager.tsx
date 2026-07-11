@@ -160,7 +160,10 @@ export default function WorksManager() {
     }
   };
 
-  const patch = async (row: WorkRow, changes: Partial<WorkRow>) => {
+  const patch = async (
+    row: WorkRow,
+    changes: Partial<Pick<WorkRow, "title" | "category" | "featured" | "sort_order">>,
+  ) => {
     setBusyId(row.id);
     setRows((r) => r.map((x) => (x.id === row.id ? { ...x, ...changes } : x)));
     try {
