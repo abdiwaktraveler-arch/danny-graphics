@@ -468,16 +468,25 @@ const om: Dict = {
 
 const dicts: Record<Lang, Dict> = { en, am, om };
 
+/** The built-in (default) text for a key, ignoring any admin overrides. */
+export function getStaticText(lang: Lang, key: string): string {
+  return dicts[lang][key] ?? en[key] ?? "";
+}
+
 interface I18nContextValue {
   lang: Lang;
   setLang: (l: Lang) => void;
   t: (key: string) => string;
+  refreshContent: () => void;
 }
 
 const I18nContext = createContext<I18nContextValue | undefined>(undefined);
 
+type Overrides = Partial<Record<Lang, Dict>>;
+
 export function I18nProvider({ children }: { children: ReactNode }) {
   const [lang, setLangState] = useState<Lang>("en");
+  const [overrides, setOverrides] = useState<Overrides>({});
 
   useEffect(() => {
     try {
@@ -486,6 +495,31 @@ export function I18nProvider({ children }: { children: ReactNode }) {
     } catch {
       /* ignore */
     }
+  }, []);
+
+  const loadContent = () => {
+    // Runs client-side only; SSR falls back to built-in defaults.
+    import("@/integrations/supabase/client")
+      .then(({ supabase }) =>
+        supabase.from("site_content").select("key,locale,value"),
+      )
+      .then(({ data }: { data: { key: string; locale: string; value: string }[] | null }) => {
+        if (!data) return;
+        const next: Overrides = {};
+        for (const row of data) {
+          if (!row.value || !row.value.trim()) continue;
+          const loc = row.locale as Lang;
+          (next[loc] ??= {})[row.key] = row.value;
+        }
+        setOverrides(next);
+      })
+      .catch(() => {
+        /* ignore — keep defaults */
+      });
+  };
+
+  useEffect(() => {
+    loadContent();
   }, []);
 
   const setLang = (l: Lang) => {
@@ -497,9 +531,14 @@ export function I18nProvider({ children }: { children: ReactNode }) {
     }
   };
 
-  const t = (key: string) => dicts[lang][key] ?? en[key] ?? key;
+  const t = (key: string) =>
+    overrides[lang]?.[key] ?? dicts[lang][key] ?? en[key] ?? key;
 
-  return <I18nContext.Provider value={{ lang, setLang, t }}>{children}</I18nContext.Provider>;
+  return (
+    <I18nContext.Provider value={{ lang, setLang, t, refreshContent: loadContent }}>
+      {children}
+    </I18nContext.Provider>
+  );
 }
 
 export function useI18n() {
@@ -507,3 +546,4 @@ export function useI18n() {
   if (!ctx) throw new Error("useI18n must be used within I18nProvider");
   return ctx;
 }
+
