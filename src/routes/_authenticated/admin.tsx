@@ -15,6 +15,8 @@ import {
   Search,
   Images,
   Type,
+  ScrollText,
+  KeyRound,
 } from "lucide-react";
 import { supabase } from "@/integrations/supabase/client";
 import {
@@ -26,6 +28,9 @@ import {
 } from "@/lib/bookings.functions";
 import WorksManager from "@/components/admin/WorksManager";
 import SiteTextManager from "@/components/admin/SiteTextManager";
+import AuditLog from "@/components/admin/AuditLog";
+import ChangePassword from "@/components/admin/ChangePassword";
+
 
 export const Route = createFileRoute("/_authenticated/admin")({
   head: () => ({
@@ -39,12 +44,14 @@ export const Route = createFileRoute("/_authenticated/admin")({
 
 const STATUSES = ["new", "contacted", "in_progress", "done", "archived"] as const;
 type Status = (typeof STATUSES)[number];
-type Tab = "works" | "bookings" | "text";
+type Tab = "works" | "bookings" | "text" | "audit" | "settings";
 
 const TABS: { id: Tab; label: string; icon: typeof Images }[] = [
   { id: "works", label: "Works", icon: Images },
   { id: "bookings", label: "Bookings", icon: Inbox },
   { id: "text", label: "Site Text", icon: Type },
+  { id: "audit", label: "Activity", icon: ScrollText },
+  { id: "settings", label: "Settings", icon: KeyRound },
 ];
 
 const STATUS_LABEL: Record<Status, string> = {
@@ -69,13 +76,26 @@ function AdminPage() {
 
   const [authorized, setAuthorized] = useState<boolean | null>(null);
   const [checking, setChecking] = useState(true);
+  const [checkFailed, setCheckFailed] = useState(false);
   const [tab, setTab] = useState<Tab>("works");
 
-  useEffect(() => {
+  const runCheck = () => {
+    setChecking(true);
+    setCheckFailed(false);
     callEnsureAdmin()
       .then((res) => setAuthorized(res.isAdmin))
-      .catch(() => setAuthorized(false))
+      .catch(() => {
+        // A thrown error here means the access check couldn't complete
+        // (e.g. missing server env vars on the host, or a network drop) —
+        // this is different from being a signed-in non-admin.
+        setAuthorized(false);
+        setCheckFailed(true);
+      })
       .finally(() => setChecking(false));
+  };
+
+  useEffect(() => {
+    runCheck();
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
@@ -99,16 +119,43 @@ function AdminPage() {
           <div className="mx-auto mb-4 flex h-14 w-14 items-center justify-center rounded-full bg-destructive/10 text-destructive">
             <ShieldAlert className="h-7 w-7" />
           </div>
-          <h1 className="font-display text-xl font-bold">Not authorized</h1>
-          <p className="mt-2 text-sm text-muted-foreground">
-            This account doesn't have admin access to the dashboard.
-          </p>
-          <button
-            onClick={signOut}
-            className="mt-6 rounded-full border border-border px-5 py-2.5 text-sm font-semibold transition-colors hover:bg-secondary"
-          >
-            Sign out
-          </button>
+          {checkFailed ? (
+            <>
+              <h1 className="font-display text-xl font-bold">Couldn't verify access</h1>
+              <p className="mt-2 text-sm text-muted-foreground">
+                We couldn't reach the server to confirm your admin access. Check your
+                connection and try again. If this keeps happening on your published
+                site, the server environment variables may be missing.
+              </p>
+              <div className="mt-6 flex flex-wrap justify-center gap-2">
+                <button
+                  onClick={runCheck}
+                  className="flex items-center gap-1.5 rounded-full bg-primary px-5 py-2.5 text-sm font-semibold text-primary-foreground shadow-soft transition-all hover:shadow-glow"
+                >
+                  <RefreshCw className="h-4 w-4" /> Try again
+                </button>
+                <button
+                  onClick={signOut}
+                  className="rounded-full border border-border px-5 py-2.5 text-sm font-semibold transition-colors hover:bg-secondary"
+                >
+                  Sign out
+                </button>
+              </div>
+            </>
+          ) : (
+            <>
+              <h1 className="font-display text-xl font-bold">Not authorized</h1>
+              <p className="mt-2 text-sm text-muted-foreground">
+                This account doesn't have admin access to the dashboard.
+              </p>
+              <button
+                onClick={signOut}
+                className="mt-6 rounded-full border border-border px-5 py-2.5 text-sm font-semibold transition-colors hover:bg-secondary"
+              >
+                Sign out
+              </button>
+            </>
+          )}
         </div>
       </div>
     );
@@ -153,6 +200,8 @@ function AdminPage() {
         {tab === "works" && <WorksManager />}
         {tab === "bookings" && <BookingsPanel />}
         {tab === "text" && <SiteTextManager />}
+        {tab === "audit" && <AuditLog />}
+        {tab === "settings" && <ChangePassword />}
       </main>
     </div>
   );

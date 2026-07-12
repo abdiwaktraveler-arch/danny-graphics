@@ -14,6 +14,42 @@ export type Database = {
   }
   public: {
     Tables: {
+      admin_audit_log: {
+        Row: {
+          action: string
+          actor_email: string | null
+          actor_id: string | null
+          created_at: string
+          details: Json
+          entity: string
+          entity_id: string | null
+          id: string
+          summary: string
+        }
+        Insert: {
+          action: string
+          actor_email?: string | null
+          actor_id?: string | null
+          created_at?: string
+          details?: Json
+          entity: string
+          entity_id?: string | null
+          id?: string
+          summary: string
+        }
+        Update: {
+          action?: string
+          actor_email?: string | null
+          actor_id?: string | null
+          created_at?: string
+          details?: Json
+          entity?: string
+          entity_id?: string | null
+          id?: string
+          summary?: string
+        }
+        Relationships: []
+      }
       bookings: {
         Row: {
           attachment_url: string | null
@@ -130,6 +166,7 @@ export type Database = {
           id: string
           image_path: string
           sort_order: number
+          thumb_path: string | null
           title: string
           updated_at: string
         }
@@ -140,6 +177,7 @@ export type Database = {
           id?: string
           image_path: string
           sort_order?: number
+          thumb_path?: string | null
           title: string
           updated_at?: string
         }
@@ -150,6 +188,7 @@ export type Database = {
           id?: string
           image_path?: string
           sort_order?: number
+          thumb_path?: string | null
           title?: string
           updated_at?: string
         }
