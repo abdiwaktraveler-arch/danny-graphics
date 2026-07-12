@@ -18,6 +18,7 @@ const filters: { id: "all" | WorkCategory; key: string }[] = [
 type WorkItem = {
   id: string;
   image: string;
+  thumb: string;
   title: string;
   category: WorkCategory;
   span?: boolean;
@@ -39,6 +40,7 @@ export default function Work() {
           rows.map((r) => ({
             id: r.id,
             image: r.url,
+            thumb: r.thumbUrl || r.url,
             title: r.title,
             category: r.category,
             span: r.featured,
@@ -58,6 +60,7 @@ export default function Work() {
     return PROJECTS.map((p) => ({
       id: p.id,
       image: p.image,
+      thumb: p.image,
       title: t(p.titleKey),
       category: p.category,
       span: p.span,
@@ -130,9 +133,10 @@ export default function Work() {
                 }`}
               >
                 <img
-                  src={p.image}
+                  src={p.thumb}
                   alt={p.title}
                   loading="lazy"
+                  decoding="async"
                   className="h-full w-full object-cover transition-transform duration-700 group-hover:scale-110"
                 />
                 <div className="absolute inset-0 bg-gradient-to-t from-accent/90 via-accent/20 to-transparent opacity-0 transition-opacity duration-500 group-hover:opacity-100" />

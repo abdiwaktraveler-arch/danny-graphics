@@ -8,6 +8,8 @@ export type PublicWork = {
   title: string;
   category: WorkCategory;
   url: string;
+  /** Small, fast-loading version for grids. Falls back to `url`. */
+  thumbUrl: string;
   featured: boolean;
   sort_order: number;
 };
@@ -30,14 +32,18 @@ export const getPublicWorks = createServerFn({ method: "GET" }).handler(
 
     const { data, error } = await supabasePublic
       .from("works")
-      .select("id,title,category,image_path,featured,sort_order")
+      .select("id,title,category,image_path,thumb_path,featured,sort_order")
       .order("sort_order", { ascending: true })
       .order("created_at", { ascending: false });
 
     if (error || !data || data.length === 0) return [];
 
     const { supabaseAdmin } = await import("@/integrations/supabase/client.server");
-    const paths = data.map((d) => d.image_path);
+    const paths = Array.from(
+      new Set(
+        data.flatMap((d) => [d.image_path, d.thumb_path].filter(Boolean) as string[]),
+      ),
+    );
     const { data: signed } = await supabaseAdmin.storage
       .from("work-images")
       .createSignedUrls(paths, 60 * 60 * 24 * 7);
@@ -48,14 +54,19 @@ export const getPublicWorks = createServerFn({ method: "GET" }).handler(
     });
 
     return data
-      .map((d) => ({
-        id: d.id,
-        title: d.title,
-        category: d.category as WorkCategory,
-        url: urlByPath.get(d.image_path) ?? "",
-        featured: d.featured,
-        sort_order: d.sort_order,
-      }))
+      .map((d) => {
+        const url = urlByPath.get(d.image_path) ?? "";
+        const thumbUrl = (d.thumb_path && urlByPath.get(d.thumb_path)) || url;
+        return {
+          id: d.id,
+          title: d.title,
+          category: d.category as WorkCategory,
+          url,
+          thumbUrl,
+          featured: d.featured,
+          sort_order: d.sort_order,
+        };
+      })
       .filter((w) => w.url);
   },
 );

@@ -1,13 +1,16 @@
 import { useEffect, useState } from "react";
+import { useServerFn } from "@tanstack/react-start";
 import { Loader2, Save, Check, RotateCcw } from "lucide-react";
 import { supabase } from "@/integrations/supabase/client";
 import { useI18n, getStaticText, LANGUAGES, type Lang } from "@/lib/i18n";
 import { EDITABLE_SECTIONS } from "@/lib/editable-content";
+import { recordAudit } from "@/lib/audit.functions";
 
 type ContentRow = { key: string; locale: string; value: string };
 
 export default function SiteTextManager() {
   const { refreshContent } = useI18n();
+  const logAudit = useServerFn(recordAudit);
   const [lang, setLang] = useState<Lang>("en");
   const [overrides, setOverrides] = useState<Record<string, Record<string, string>>>({});
   const [drafts, setDrafts] = useState<Record<string, string>>({});
@@ -68,6 +71,14 @@ export default function SiteTextManager() {
       });
       setSavedKey(key);
       refreshContent();
+      await logAudit({
+        data: {
+          action: "update",
+          entity: "site_text",
+          entity_id: `${lang}:${key}`,
+          summary: `Updated site text "${key}" (${lang})`,
+        },
+      }).catch(() => {});
       setTimeout(() => setSavedKey((k) => (k === key ? null : k)), 2000);
     } catch (e) {
       setError(e instanceof Error ? e.message : "Save failed.");
@@ -97,6 +108,14 @@ export default function SiteTextManager() {
         return next;
       });
       refreshContent();
+      await logAudit({
+        data: {
+          action: "delete",
+          entity: "site_text",
+          entity_id: `${lang}:${key}`,
+          summary: `Reset site text "${key}" to default (${lang})`,
+        },
+      }).catch(() => {});
     } catch (e) {
       setError(e instanceof Error ? e.message : "Reset failed.");
     } finally {

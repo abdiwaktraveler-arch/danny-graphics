@@ -12,14 +12,20 @@ import {
   Check,
   Pencil,
 } from "lucide-react";
+import { useServerFn } from "@tanstack/react-start";
 import { supabase } from "@/integrations/supabase/client";
 import type { WorkCategory } from "@/lib/site";
+import { processWorkImage } from "@/lib/image-processing";
+import { recordAudit } from "@/lib/audit.functions";
+
+
 
 type WorkRow = {
   id: string;
   title: string;
   category: WorkCategory;
   image_path: string;
+  thumb_path: string | null;
   featured: boolean;
   sort_order: number;
   url?: string;
@@ -32,9 +38,10 @@ const CATEGORIES: { id: WorkCategory; label: string }[] = [
   { id: "social", label: "Social Media" },
 ];
 
-const MAX_BYTES = 8 * 1024 * 1024; // 8MB
+const MAX_BYTES = 25 * 1024 * 1024; // 25MB source cap — we compress before upload
 
 export default function WorksManager() {
+  const logAudit = useServerFn(recordAudit);
   const [rows, setRows] = useState<WorkRow[]>([]);
   const [loading, setLoading] = useState(true);
   const [busyId, setBusyId] = useState<string | null>(null);
@@ -55,21 +62,22 @@ export default function WorksManager() {
     try {
       const { data, error } = await supabase
         .from("works")
-        .select("id,title,category,image_path,featured,sort_order")
+        .select("id,title,category,image_path,thumb_path,featured,sort_order")
         .order("sort_order", { ascending: true })
         .order("created_at", { ascending: false });
       if (error) throw error;
       const list = (data ?? []) as WorkRow[];
       if (list.length) {
+        // Prefer the thumbnail for the admin grid (falls back to the full image).
+        const wanted = Array.from(
+          new Set(list.map((r) => r.thumb_path || r.image_path)),
+        );
         const { data: signed } = await supabase.storage
           .from("work-images")
-          .createSignedUrls(
-            list.map((r) => r.image_path),
-            60 * 60,
-          );
+          .createSignedUrls(wanted, 60 * 60);
         const byPath = new Map<string, string>();
         (signed ?? []).forEach((s) => s.path && s.signedUrl && byPath.set(s.path, s.signedUrl));
-        list.forEach((r) => (r.url = byPath.get(r.image_path)));
+        list.forEach((r) => (r.url = byPath.get(r.thumb_path || r.image_path)));
       }
       setRows(list);
     } catch (e) {
@@ -92,7 +100,7 @@ export default function WorksManager() {
       return;
     }
     if (f.size > MAX_BYTES) {
-      setError("Image is too large (max 8MB).");
+      setError("Image is too large (max 25MB).");
       return;
     }
     setFile(f);
@@ -116,29 +124,63 @@ export default function WorksManager() {
     }
     setUploading(true);
     setError(null);
+    let mainPath: string | null = null;
+    let thumbPath: string | null = null;
     try {
-      const ext = (file.name.split(".").pop() || "jpg").toLowerCase();
-      const path = `${crypto.randomUUID()}.${ext}`;
+      // Resize + compress in the browser and generate a small thumbnail so the
+      // portfolio stays fast to load (no giant originals are ever stored).
+      const processed = await processWorkImage(file);
+      const id = crypto.randomUUID();
+      mainPath = `${id}.${processed.ext}`;
+      thumbPath = `${id}_thumb.${processed.ext}`;
+
       const { error: upErr } = await supabase.storage
         .from("work-images")
-        .upload(path, file, { contentType: file.type, upsert: false });
+        .upload(mainPath, processed.full, {
+          contentType: processed.contentType,
+          upsert: false,
+        });
       if (upErr) throw upErr;
 
+      const { error: thErr } = await supabase.storage
+        .from("work-images")
+        .upload(thumbPath, processed.thumb, {
+          contentType: processed.contentType,
+          upsert: false,
+        });
+      if (thErr) throw thErr;
+
       const nextOrder = rows.length ? Math.max(...rows.map((r) => r.sort_order)) + 1 : 0;
-      const { error: insErr } = await supabase.from("works").insert({
-        title: title.trim(),
-        category,
-        image_path: path,
-        featured,
-        sort_order: nextOrder,
-      });
-      if (insErr) {
-        await supabase.storage.from("work-images").remove([path]);
-        throw insErr;
-      }
+      const { data: inserted, error: insErr } = await supabase
+        .from("works")
+        .insert({
+          title: title.trim(),
+          category,
+          image_path: mainPath,
+          thumb_path: thumbPath,
+          featured,
+          sort_order: nextOrder,
+        })
+        .select("id")
+        .single();
+      if (insErr) throw insErr;
+
+      await logAudit({
+        data: {
+          action: "create",
+          entity: "work",
+          entity_id: inserted?.id ?? null,
+          summary: `Uploaded work "${title.trim()}"`,
+          details: { category, featured },
+        },
+      }).catch(() => {});
+
       resetForm();
       await load();
     } catch (e) {
+      // Roll back any orphaned uploads if the DB insert failed.
+      const cleanup = [mainPath, thumbPath].filter(Boolean) as string[];
+      if (cleanup.length) await supabase.storage.from("work-images").remove(cleanup);
       setError(e instanceof Error ? e.message : "Upload failed.");
     } finally {
       setUploading(false);
@@ -151,8 +193,17 @@ export default function WorksManager() {
     try {
       const { error } = await supabase.from("works").delete().eq("id", row.id);
       if (error) throw error;
-      await supabase.storage.from("work-images").remove([row.image_path]);
+      const paths = [row.image_path, row.thumb_path].filter(Boolean) as string[];
+      await supabase.storage.from("work-images").remove(paths);
       setRows((r) => r.filter((x) => x.id !== row.id));
+      await logAudit({
+        data: {
+          action: "delete",
+          entity: "work",
+          entity_id: row.id,
+          summary: `Deleted work "${row.title}"`,
+        },
+      }).catch(() => {});
     } catch (e) {
       setError(e instanceof Error ? e.message : "Delete failed.");
     } finally {
@@ -169,6 +220,19 @@ export default function WorksManager() {
     try {
       const { error } = await supabase.from("works").update(changes).eq("id", row.id);
       if (error) throw error;
+      // Skip audit noise for pure reordering (handled by `move`).
+      if (!("sort_order" in changes && Object.keys(changes).length === 1)) {
+        const fields = Object.keys(changes).join(", ");
+        await logAudit({
+          data: {
+            action: "update",
+            entity: "work",
+            entity_id: row.id,
+            summary: `Edited work "${row.title}" (${fields})`,
+            details: changes as Record<string, string | number | boolean | null>,
+          },
+        }).catch(() => {});
+      }
     } catch (e) {
       setError(e instanceof Error ? e.message : "Update failed.");
       load();
@@ -226,7 +290,7 @@ export default function WorksManager() {
               <span className="flex flex-col items-center gap-2 text-sm">
                 <ImagePlus className="h-7 w-7" />
                 Click to choose an image
-                <span className="text-xs opacity-70">JPG / PNG / WEBP · max 8MB</span>
+                <span className="text-xs opacity-70">JPG / PNG / WEBP · auto-compressed</span>
               </span>
             )}
           </button>
