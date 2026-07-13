@@ -38,13 +38,12 @@ export const getPublicWorks = createServerFn({ method: "GET" }).handler(
 
     if (error || !data || data.length === 0) return [];
 
-    const { supabaseAdmin } = await import("@/integrations/supabase/client.server");
     const paths = Array.from(
       new Set(
         data.flatMap((d) => [d.image_path, d.thumb_path].filter(Boolean) as string[]),
       ),
     );
-    const { data: signed } = await supabaseAdmin.storage
+    const { data: signed } = await supabasePublic.storage
       .from("work-images")
       .createSignedUrls(paths, 60 * 60 * 24 * 7);
 

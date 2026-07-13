@@ -12,11 +12,10 @@ import {
   Check,
   Pencil,
 } from "lucide-react";
-import { useServerFn } from "@tanstack/react-start";
 import { supabase } from "@/integrations/supabase/client";
 import type { WorkCategory } from "@/lib/site";
 import { processWorkImage } from "@/lib/image-processing";
-import { recordAudit } from "@/lib/audit.functions";
+import { recordClientAudit } from "@/lib/audit-client";
 
 
 
@@ -41,7 +40,6 @@ const CATEGORIES: { id: WorkCategory; label: string }[] = [
 const MAX_BYTES = 25 * 1024 * 1024; // 25MB source cap — we compress before upload
 
 export default function WorksManager() {
-  const logAudit = useServerFn(recordAudit);
   const [rows, setRows] = useState<WorkRow[]>([]);
   const [loading, setLoading] = useState(true);
   const [busyId, setBusyId] = useState<string | null>(null);
@@ -165,14 +163,12 @@ export default function WorksManager() {
         .single();
       if (insErr) throw insErr;
 
-      await logAudit({
-        data: {
-          action: "create",
-          entity: "work",
-          entity_id: inserted?.id ?? null,
-          summary: `Uploaded work "${title.trim()}"`,
-          details: { category, featured },
-        },
+      await recordClientAudit({
+        action: "create",
+        entity: "work",
+        entity_id: inserted?.id ?? null,
+        summary: `Uploaded work "${title.trim()}"`,
+        details: { category, featured },
       }).catch(() => {});
 
       resetForm();
@@ -196,13 +192,11 @@ export default function WorksManager() {
       const paths = [row.image_path, row.thumb_path].filter(Boolean) as string[];
       await supabase.storage.from("work-images").remove(paths);
       setRows((r) => r.filter((x) => x.id !== row.id));
-      await logAudit({
-        data: {
-          action: "delete",
-          entity: "work",
-          entity_id: row.id,
-          summary: `Deleted work "${row.title}"`,
-        },
+      await recordClientAudit({
+        action: "delete",
+        entity: "work",
+        entity_id: row.id,
+        summary: `Deleted work "${row.title}"`,
       }).catch(() => {});
     } catch (e) {
       setError(e instanceof Error ? e.message : "Delete failed.");
@@ -223,14 +217,12 @@ export default function WorksManager() {
       // Skip audit noise for pure reordering (handled by `move`).
       if (!("sort_order" in changes && Object.keys(changes).length === 1)) {
         const fields = Object.keys(changes).join(", ");
-        await logAudit({
-          data: {
-            action: "update",
-            entity: "work",
-            entity_id: row.id,
-            summary: `Edited work "${row.title}" (${fields})`,
-            details: changes as Record<string, string | number | boolean | null>,
-          },
+        await recordClientAudit({
+          action: "update",
+          entity: "work",
+          entity_id: row.id,
+          summary: `Edited work "${row.title}" (${fields})`,
+          details: changes as Record<string, string | number | boolean | null>,
         }).catch(() => {});
       }
     } catch (e) {

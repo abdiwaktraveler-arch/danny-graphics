@@ -11,7 +11,6 @@ import {
   Paperclip,
   Trash2,
   RefreshCw,
-  ShieldAlert,
   Search,
   Images,
   Type,
@@ -19,13 +18,7 @@ import {
   KeyRound,
 } from "lucide-react";
 import { supabase } from "@/integrations/supabase/client";
-import {
-  ensureAdmin,
-  getBookings,
-  updateBookingStatus,
-  deleteBooking,
-  type BookingRow,
-} from "@/lib/bookings.functions";
+import type { BookingRow } from "@/lib/bookings.functions";
 import WorksManager from "@/components/admin/WorksManager";
 import SiteTextManager from "@/components/admin/SiteTextManager";
 import AuditLog from "@/components/admin/AuditLog";
@@ -72,94 +65,12 @@ const STATUS_STYLE: Record<Status, string> = {
 
 function AdminPage() {
   const navigate = useNavigate();
-  const callEnsureAdmin = useServerFn(ensureAdmin);
-
-  const [authorized, setAuthorized] = useState<boolean | null>(null);
-  const [checking, setChecking] = useState(true);
-  const [checkFailed, setCheckFailed] = useState(false);
   const [tab, setTab] = useState<Tab>("works");
-
-  const runCheck = () => {
-    setChecking(true);
-    setCheckFailed(false);
-    callEnsureAdmin()
-      .then((res) => setAuthorized(res.isAdmin))
-      .catch(() => {
-        // A thrown error here means the access check couldn't complete
-        // (e.g. missing server env vars on the host, or a network drop) —
-        // this is different from being a signed-in non-admin.
-        setAuthorized(false);
-        setCheckFailed(true);
-      })
-      .finally(() => setChecking(false));
-  };
-
-  useEffect(() => {
-    runCheck();
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, []);
 
   const signOut = async () => {
     await supabase.auth.signOut();
     navigate({ to: "/auth" });
   };
-
-  if (checking) {
-    return (
-      <div className="flex min-h-screen items-center justify-center bg-background text-muted-foreground">
-        <Loader2 className="mr-2 h-5 w-5 animate-spin" /> Checking access...
-      </div>
-    );
-  }
-
-  if (authorized === false) {
-    return (
-      <div className="flex min-h-screen items-center justify-center bg-background px-5">
-        <div className="glass max-w-md rounded-3xl p-8 text-center shadow-elegant">
-          <div className="mx-auto mb-4 flex h-14 w-14 items-center justify-center rounded-full bg-destructive/10 text-destructive">
-            <ShieldAlert className="h-7 w-7" />
-          </div>
-          {checkFailed ? (
-            <>
-              <h1 className="font-display text-xl font-bold">Couldn't verify access</h1>
-              <p className="mt-2 text-sm text-muted-foreground">
-                We couldn't reach the server to confirm your admin access. Check your
-                connection and try again. If this keeps happening on your published
-                site, the server environment variables may be missing.
-              </p>
-              <div className="mt-6 flex flex-wrap justify-center gap-2">
-                <button
-                  onClick={runCheck}
-                  className="flex items-center gap-1.5 rounded-full bg-primary px-5 py-2.5 text-sm font-semibold text-primary-foreground shadow-soft transition-all hover:shadow-glow"
-                >
-                  <RefreshCw className="h-4 w-4" /> Try again
-                </button>
-                <button
-                  onClick={signOut}
-                  className="rounded-full border border-border px-5 py-2.5 text-sm font-semibold transition-colors hover:bg-secondary"
-                >
-                  Sign out
-                </button>
-              </div>
-            </>
-          ) : (
-            <>
-              <h1 className="font-display text-xl font-bold">Not authorized</h1>
-              <p className="mt-2 text-sm text-muted-foreground">
-                This account doesn't have admin access to the dashboard.
-              </p>
-              <button
-                onClick={signOut}
-                className="mt-6 rounded-full border border-border px-5 py-2.5 text-sm font-semibold transition-colors hover:bg-secondary"
-              >
-                Sign out
-              </button>
-            </>
-          )}
-        </div>
-      </div>
-    );
-  }
 
   return (
     <div className="min-h-screen bg-background">
@@ -208,10 +119,6 @@ function AdminPage() {
 }
 
 function BookingsPanel() {
-  const callGetBookings = useServerFn(getBookings);
-  const callUpdate = useServerFn(updateBookingStatus);
-  const callDelete = useServerFn(deleteBooking);
-
   const [bookings, setBookings] = useState<BookingRow[]>([]);
   const [loading, setLoading] = useState(true);
   const [busyId, setBusyId] = useState<string | null>(null);
@@ -221,8 +128,26 @@ function BookingsPanel() {
   const load = async () => {
     setLoading(true);
     try {
-      const data = await callGetBookings();
-      setBookings(data);
+      const { data, error } = await supabase
+        .from("bookings")
+        .select("*")
+        .order("created_at", { ascending: false });
+      if (error) throw error;
+
+      const rows = await Promise.all(
+        (data ?? []).map(async (b): Promise<BookingRow> => {
+          let signed: string | null = null;
+          if (b.attachment_url) {
+            const { data: signedData } = await supabase.storage
+              .from("booking-attachments")
+              .createSignedUrl(b.attachment_url, 60 * 60);
+            signed = signedData?.signedUrl ?? null;
+          }
+          return { ...b, attachment_signed_url: signed } as BookingRow;
+        }),
+      );
+
+      setBookings(rows);
     } catch {
       setBookings([]);
     } finally {
@@ -239,7 +164,8 @@ function BookingsPanel() {
     setBusyId(id);
     setBookings((b) => b.map((x) => (x.id === id ? { ...x, status } : x)));
     try {
-      await callUpdate({ data: { id, status } });
+      const { error } = await supabase.from("bookings").update({ status }).eq("id", id);
+      if (error) throw error;
     } catch {
       load();
     } finally {
@@ -251,7 +177,8 @@ function BookingsPanel() {
     if (!confirm("Delete this booking permanently?")) return;
     setBusyId(id);
     try {
-      await callDelete({ data: { id } });
+      const { error } = await supabase.from("bookings").delete().eq("id", id);
+      if (error) throw error;
       setBookings((b) => b.filter((x) => x.id !== id));
     } catch {
       load();
