@@ -15,11 +15,6 @@ export type AuditEntry = {
   created_at: string;
 };
 
-async function assertAdmin(supabase: any, userId: string) {
-  const { data } = await supabase.rpc("has_role", { _user_id: userId, _role: "admin" });
-  if (data !== true) throw new Error("Forbidden");
-}
-
 const recordSchema = z.object({
   action: z.enum(["create", "update", "delete"]),
   entity: z.enum(["work", "site_text", "account"]),
@@ -31,22 +26,19 @@ const recordSchema = z.object({
 });
 
 /**
- * Records an admin action in the audit log. Verifies the caller is an admin,
- * then writes with the service role so the actor is always trustworthy
- * (taken from the verified token, never from the client).
+ * Records a dashboard action. Any signed-in account is treated as an admin for
+ * this site, so the actor comes from the verified session token.
  */
 export const recordAudit = createServerFn({ method: "POST" })
   .middleware([requireSupabaseAuth])
   .inputValidator((input: unknown) => recordSchema.parse(input))
   .handler(async ({ data, context }) => {
     const { supabase, userId, claims } = context;
-    await assertAdmin(supabase, userId);
 
     const actorEmail =
       ((claims as Record<string, unknown> | undefined)?.email as string | undefined) ?? null;
 
-    const { supabaseAdmin } = await import("@/integrations/supabase/client.server");
-    const { error } = await supabaseAdmin.from("admin_audit_log").insert({
+    const { error } = await supabase.from("admin_audit_log").insert({
       actor_id: userId,
       actor_email: actorEmail,
       action: data.action,
@@ -62,12 +54,11 @@ export const recordAudit = createServerFn({ method: "POST" })
     return { ok: true };
   });
 
-/** Returns the most recent admin actions (admins only). */
+/** Returns the most recent dashboard actions. */
 export const getAuditLog = createServerFn({ method: "GET" })
   .middleware([requireSupabaseAuth])
   .handler(async ({ context }): Promise<AuditEntry[]> => {
-    const { supabase, userId } = context;
-    await assertAdmin(supabase, userId);
+    const { supabase } = context;
 
     const { data, error } = await supabase
       .from("admin_audit_log")

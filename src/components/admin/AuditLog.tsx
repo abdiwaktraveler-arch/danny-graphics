@@ -1,7 +1,7 @@
 import { useEffect, useMemo, useState } from "react";
-import { useServerFn } from "@tanstack/react-start";
 import { Loader2, RefreshCw, ScrollText, Plus, Pencil, Trash2, Search } from "lucide-react";
-import { getAuditLog, type AuditEntry } from "@/lib/audit.functions";
+import { supabase } from "@/integrations/supabase/client";
+import type { AuditEntry } from "@/lib/audit.functions";
 
 const ACTION_META: Record<
   string,
@@ -19,7 +19,6 @@ const ENTITY_LABEL: Record<string, string> = {
 };
 
 export default function AuditLog() {
-  const callGetAuditLog = useServerFn(getAuditLog);
   const [rows, setRows] = useState<AuditEntry[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
@@ -29,7 +28,13 @@ export default function AuditLog() {
     setLoading(true);
     setError(null);
     try {
-      setRows(await callGetAuditLog());
+      const { data, error } = await supabase
+        .from("admin_audit_log")
+        .select("id,actor_email,action,entity,entity_id,summary,details,created_at")
+        .order("created_at", { ascending: false })
+        .limit(200);
+      if (error) throw error;
+      setRows((data ?? []) as AuditEntry[]);
     } catch (e) {
       setError(e instanceof Error ? e.message : "Failed to load the activity log.");
     } finally {

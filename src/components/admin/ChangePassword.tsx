@@ -1,11 +1,9 @@
 import { useState } from "react";
-import { useServerFn } from "@tanstack/react-start";
 import { Loader2, Lock, Check, KeyRound, Eye, EyeOff } from "lucide-react";
 import { supabase } from "@/integrations/supabase/client";
-import { recordAudit } from "@/lib/audit.functions";
+import { recordClientAudit } from "@/lib/audit-client";
 
 export default function ChangePassword() {
-  const logAudit = useServerFn(recordAudit);
   const [current, setCurrent] = useState("");
   const [next, setNext] = useState("");
   const [confirm, setConfirm] = useState("");
@@ -46,12 +44,10 @@ export default function ChangePassword() {
       const { error: updErr } = await supabase.auth.updateUser({ password: next });
       if (updErr) throw updErr;
 
-      await logAudit({
-        data: {
-          action: "update",
-          entity: "account",
-          summary: "Changed admin password",
-        },
+      await recordClientAudit({
+        action: "update",
+        entity: "account",
+        summary: "Changed admin password",
       }).catch(() => {});
 
       setCurrent("");
