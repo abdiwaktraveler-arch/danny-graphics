@@ -64,7 +64,6 @@ const STATUS_STYLE: Record<Status, string> = {
 };
 
 function AdminPage() {
-  const [checking, setChecking] = useState(false);
   const [userEmail, setUserEmail] = useState<string | null>(null);
   const [sessionError, setSessionError] = useState<string | null>(null);
 
@@ -100,14 +99,6 @@ function AdminPage() {
       data.subscription.unsubscribe();
     };
   }, []);
-
-  if (checking) {
-    return (
-      <div className="flex min-h-screen items-center justify-center bg-background px-5 text-muted-foreground">
-        <Loader2 className="mr-2 h-5 w-5 animate-spin" /> Opening admin dashboard...
-      </div>
-    );
-  }
 
   if (!userEmail) {
     return <AdminLogin initialError={sessionError} onSignedIn={setUserEmail} />;
