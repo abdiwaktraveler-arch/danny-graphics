@@ -64,7 +64,7 @@ const STATUS_STYLE: Record<Status, string> = {
 };
 
 function AdminPage() {
-  const [checking, setChecking] = useState(true);
+  const [checking, setChecking] = useState(false);
   const [userEmail, setUserEmail] = useState<string | null>(null);
   const [sessionError, setSessionError] = useState<string | null>(null);
 
@@ -72,16 +72,11 @@ function AdminPage() {
     let alive = true;
 
     const loadSession = async () => {
-      setChecking(true);
       setSessionError(null);
       try {
         const { data: sessionData } = await supabase.auth.getSession();
         const cachedEmail = sessionData.session?.user.email ?? null;
         if (alive && cachedEmail) setUserEmail(cachedEmail);
-
-        const { data, error } = await supabase.auth.getUser();
-        if (error && !cachedEmail) throw error;
-        if (alive) setUserEmail(data.user?.email ?? cachedEmail);
       } catch (error) {
         if (alive) {
           setUserEmail(null);
@@ -91,8 +86,6 @@ function AdminPage() {
               : "Could not read your saved login. Please sign in again.",
           );
         }
-      } finally {
-        if (alive) setChecking(false);
       }
     };
 
@@ -100,7 +93,6 @@ function AdminPage() {
     const { data } = supabase.auth.onAuthStateChange((_event, session) => {
       if (!alive) return;
       setUserEmail(session?.user.email ?? null);
-      setChecking(false);
     });
 
     return () => {
