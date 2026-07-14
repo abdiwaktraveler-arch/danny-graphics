@@ -24,7 +24,7 @@ import AuditLog from "@/components/admin/AuditLog";
 import ChangePassword from "@/components/admin/ChangePassword";
 
 
-export const Route = createFileRoute("/_authenticated/admin")({
+export const Route = createFileRoute("/admin")({
   head: () => ({
     meta: [
       { title: "Admin — Danny Graphics" },
