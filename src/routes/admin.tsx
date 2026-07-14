@@ -1,4 +1,4 @@
-import { createFileRoute, useNavigate } from "@tanstack/react-router";
+import { createFileRoute } from "@tanstack/react-router";
 import { useEffect, useMemo, useState } from "react";
 import { AnimatePresence, motion } from "motion/react";
 import {
@@ -15,6 +15,7 @@ import {
   Type,
   ScrollText,
   KeyRound,
+  Lock,
 } from "lucide-react";
 import { supabase } from "@/integrations/supabase/client";
 import type { BookingRow } from "@/lib/bookings.functions";
@@ -24,7 +25,7 @@ import AuditLog from "@/components/admin/AuditLog";
 import ChangePassword from "@/components/admin/ChangePassword";
 
 
-export const Route = createFileRoute("/_authenticated/admin")({
+export const Route = createFileRoute("/admin")({
   head: () => ({
     meta: [
       { title: "Admin — Danny Graphics" },
@@ -63,12 +64,171 @@ const STATUS_STYLE: Record<Status, string> = {
 };
 
 function AdminPage() {
-  const navigate = useNavigate();
+  const [userEmail, setUserEmail] = useState<string | null>(null);
+  const [sessionError, setSessionError] = useState<string | null>(null);
+
+  useEffect(() => {
+    let alive = true;
+
+    const loadSession = async () => {
+      setSessionError(null);
+      try {
+        const { data: sessionData } = await supabase.auth.getSession();
+        const cachedEmail = sessionData.session?.user.email ?? null;
+        if (alive && cachedEmail) setUserEmail(cachedEmail);
+      } catch (error) {
+        if (alive) {
+          setUserEmail(null);
+          setSessionError(
+            error instanceof Error
+              ? error.message
+              : "Could not read your saved login. Please sign in again.",
+          );
+        }
+      }
+    };
+
+    loadSession();
+    const { data } = supabase.auth.onAuthStateChange((_event, session) => {
+      if (!alive) return;
+      setUserEmail(session?.user.email ?? null);
+    });
+
+    return () => {
+      alive = false;
+      data.subscription.unsubscribe();
+    };
+  }, []);
+
+  if (!userEmail) {
+    return <AdminLogin initialError={sessionError} onSignedIn={setUserEmail} />;
+  }
+
+  return <AdminDashboard userEmail={userEmail} onSignedOut={() => setUserEmail(null)} />;
+}
+
+function AdminLogin({
+  initialError,
+  onSignedIn,
+}: {
+  initialError: string | null;
+  onSignedIn: (email: string) => void;
+}) {
+  const [email, setEmail] = useState("admin@dannygraphics.com");
+  const [password, setPassword] = useState("");
+  const [mode, setMode] = useState<"signin" | "signup">("signin");
+  const [loading, setLoading] = useState(false);
+  const [error, setError] = useState<string | null>(initialError);
+  const [notice, setNotice] = useState<string | null>(null);
+
+  const submit = async (event: React.FormEvent) => {
+    event.preventDefault();
+    setLoading(true);
+    setError(null);
+    setNotice(null);
+    try {
+      const cleanEmail = email.trim();
+      if (mode === "signup") {
+        const { error: signUpError } = await supabase.auth.signUp({
+          email: cleanEmail,
+          password,
+          options: { emailRedirectTo: `${window.location.origin}/admin` },
+        });
+        if (signUpError) throw signUpError;
+        setNotice("Account created. Signing you in now...");
+      }
+
+      const { data, error: signInError } = await supabase.auth.signInWithPassword({
+        email: cleanEmail,
+        password,
+      });
+      if (signInError) throw signInError;
+      onSignedIn(data.user?.email ?? cleanEmail);
+    } catch (err) {
+      const message = err instanceof Error ? err.message : "Could not sign in. Please try again.";
+      setError(
+        message.toLowerCase().includes("invalid")
+          ? "Email or password is wrong. If this is a new phone/account, tap Create account below first."
+          : message,
+      );
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  return (
+    <div className="flex min-h-screen items-center justify-center bg-background px-4 py-10">
+      <div className="glass w-full max-w-md rounded-2xl p-5 shadow-elegant sm:p-7">
+        <div className="mb-6">
+          <p className="text-xs font-semibold uppercase text-primary">Danny Graphics</p>
+          <h1 className="mt-1 font-display text-2xl font-bold">Admin login</h1>
+          <p className="mt-1 text-sm text-muted-foreground">Use your admin email and password on any phone.</p>
+        </div>
+
+        <form onSubmit={submit} className="space-y-3">
+          <div className="relative">
+            <Mail className="pointer-events-none absolute left-4 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
+            <input
+              type="email"
+              required
+              inputMode="email"
+              autoCapitalize="none"
+              autoComplete="email"
+              placeholder="Email address"
+              value={email}
+              onChange={(e) => setEmail(e.target.value)}
+              className="w-full rounded-2xl border border-border bg-card/50 py-3.5 pl-11 pr-4 text-base outline-none transition-colors focus:border-primary sm:text-sm"
+            />
+          </div>
+          <div className="relative">
+            <Lock className="pointer-events-none absolute left-4 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
+            <input
+              type="password"
+              required
+              minLength={6}
+              autoComplete={mode === "signup" ? "new-password" : "current-password"}
+              placeholder="Password"
+              value={password}
+              onChange={(e) => setPassword(e.target.value)}
+              className="w-full rounded-2xl border border-border bg-card/50 py-3.5 pl-11 pr-4 text-base outline-none transition-colors focus:border-primary sm:text-sm"
+            />
+          </div>
+
+          {error && <p className="rounded-xl bg-destructive/10 px-3 py-2 text-sm text-destructive">{error}</p>}
+          {notice && <p className="rounded-xl bg-primary/10 px-3 py-2 text-sm text-primary">{notice}</p>}
+
+          <button
+            type="submit"
+            disabled={loading}
+            className="flex w-full items-center justify-center gap-2 rounded-full bg-primary px-6 py-3.5 text-sm font-semibold text-primary-foreground shadow-soft transition-all hover:shadow-glow disabled:opacity-70"
+          >
+            {loading && <Loader2 className="h-4 w-4 animate-spin" />}
+            {mode === "signin" ? "Open admin dashboard" : "Create account and open dashboard"}
+          </button>
+        </form>
+
+        <button
+          type="button"
+          onClick={() => {
+            setMode((current) => (current === "signin" ? "signup" : "signin"));
+            setError(null);
+            setNotice(null);
+          }}
+          className="mt-5 w-full text-center text-sm font-semibold text-primary hover:underline"
+        >
+          {mode === "signin" ? "Create account for this phone" : "I already have an account"}
+        </button>
+      </div>
+    </div>
+  );
+}
+
+function AdminDashboard({ userEmail, onSignedOut }: { userEmail: string; onSignedOut: () => void }) {
   const [tab, setTab] = useState<Tab>("works");
 
   const signOut = async () => {
     await supabase.auth.signOut();
-    navigate({ to: "/auth" });
+    onSignedOut();
   };
 
   return (
@@ -77,7 +237,7 @@ function AdminPage() {
         <div className="mx-auto flex max-w-6xl flex-wrap items-center justify-between gap-3 px-5 py-4">
           <div>
             <h1 className="font-display text-lg font-bold">Admin dashboard</h1>
-            <p className="text-xs text-muted-foreground">Danny Graphics</p>
+            <p className="text-xs text-muted-foreground">{userEmail}</p>
           </div>
           <button
             onClick={signOut}
